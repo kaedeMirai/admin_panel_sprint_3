@@ -1,0 +1,61 @@
+version: "3.8"
+services:
+  database:
+    container_name: db-container
+    image: postgres:13-alpine
+    env_file:
+      - app/.env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./dump.sql:/docker-entrypoint-initdb.d/dump.sql:ro
+    networks:
+      - etl-net
+
+  elasticsearch:
+    container_name: es-container
+    image: elasticsearch:8.10.2
+    environment:
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - ${HOME}/elasticsearch/data_sp3:/usr/share/elasticsearch/data
+    networks:
+      - etl-net
+    depends_on:
+      - database
+    ports:
+      - "9200:9200"
+
+  etl:
+    container_name: etl-container
+    build: ./app/
+    env_file:
+      - app/.env
+    networks:
+      - etl-net
+    depends_on:
+      - database
+      - elasticsearch
+
+  kibana:
+    container_name: kb-container
+    image: kibana:8.10.2
+    environment:
+      - ELASTICSEARCH_HOSTS=http://es-container:9200
+    networks:
+      - etl-net
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+
+volumes:
+  postgres-data:
+    driver: local
+  es-data:
+    driver: local
+
+networks:
+  etl-net:
+    driver: bridge
